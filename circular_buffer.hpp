@@ -90,7 +90,7 @@ class circular_buffer
     
     for(size_type i = 0; i < newSize; ++i) {
       const size_type pos = newSize - i - 1;
-      construct_at(&newBuffer[pos], operator[](i));
+      std::construct_at(&newBuffer[pos], operator[](i));
     }
     
     clear();
@@ -104,12 +104,12 @@ class circular_buffer
   
   void _construct(size_type pos, const_reference value = value_type())
   {
-    construct_at(&_buffer[pos], value);
+    std::construct_at(&_buffer[pos], value);
   }
   
   void _construct(size_type pos, T&& value)
   {
-    construct(_allocator, &_buffer[pos], std::forward(value));
+    std::construct_at(&_buffer[pos], std::forward< T >(value));
   }
   
 
@@ -124,11 +124,15 @@ class circular_buffer
   }
   
   constexpr explicit circular_buffer(size_type count, const allocator_type& alloc = allocator_type())
+    : _allocator(alloc)
+    , _buffer(_allocator.allocate(count))
+    , _index(count-1)
+    , _size(count)
+    , _capacity(count)
   {
-    circular_buffer(count, T(), alloc);
   }
   
-  constexpr explicit circular_buffer(size_type count, const_reference value = value_type(), const allocator_type& alloc = allocator_type())
+  constexpr explicit circular_buffer(size_type count, const_reference value, const allocator_type& alloc = allocator_type())
     : _allocator(alloc)
     , _buffer(_allocator.allocate(count))
     , _index(count-1)
@@ -182,7 +186,7 @@ class circular_buffer
   
   constexpr circular_buffer(circular_buffer&& other) noexcept
     : _allocator(other._allocator)
-    , _buffer(other._allocator)
+    , _buffer(other._buffer)
     , _index(other._index)
     , _size(other._size)
     , _capacity(other._capacity)
@@ -324,12 +328,12 @@ class circular_buffer
   
   constexpr pointer data()
   {
-    return _buffer[0];
+    return &_buffer[0];
   }
   
   constexpr const_pointer data() const
   {
-    return _buffer[0];
+    return &_buffer[0];
   }
     
   constexpr iterator begin() noexcept
@@ -362,32 +366,32 @@ class circular_buffer
     return const_iterator(*this, _size);
   }
   
-  constexpr iterator rbegin() noexcept
+  constexpr reverse_iterator rbegin() noexcept
   {
     return std::make_reverse_iterator(end());
   }
   
-  constexpr const_iterator rbegin() const noexcept
+  constexpr const_reverse_iterator rbegin() const noexcept
   {
     return crbegin();
   }
   
-  constexpr const_iterator crbegin() const noexcept
+  constexpr const_reverse_iterator crbegin() const noexcept
   {
     return std::make_reverse_iterator(cend());
   }
   
-  constexpr iterator rend() noexcept
+  constexpr reverse_iterator rend() noexcept
   {
     return std::make_reverse_iterator(begin());
   }
   
-  constexpr const_iterator rend() const noexcept
+  constexpr const_reverse_iterator rend() const noexcept
   {
     return crend();
   }
   
-  constexpr const_iterator crend() const noexcept
+  constexpr const_reverse_iterator crend() const noexcept
   {
     return std::make_reverse_iterator(cbegin());
   }
@@ -436,26 +440,26 @@ class circular_buffer
   {
     if constexpr(std::is_destructible_v<value_type> && !std::is_trivially_destructible_v<value_type>) {
       for(size_type i = 0; i < _size; ++i) {
-        destroy_at(&_buffer[i]);
+        std::destroy_at(&_buffer[i]);
       }
     }
     _index = 0;
     _size = 0;
   }
   
-  constexpr void push(const_reference value)
+  constexpr void push_back(const_reference value)
   {
     _index = (_index + 1) % _capacity;
-    _buffer[_index] = value;
+    _construct(_index, value);
     if(_size != _capacity) {
       _size ++;
     }
   }
   
-  constexpr void push(T&& value)
+  constexpr void push_back(T&& value)
   {
     _index = (_index + 1) % _capacity;
-    _buffer[_index] = std::move(value);
+    _construct(_index, std::move(value));
     if(_size != _capacity) {
       _size ++;
     }
@@ -464,7 +468,7 @@ class circular_buffer
   template< class... Args >
   constexpr reference emplace(Args&&... args)
   {
-    value_type value(std::forward<Args>(args)...);
+    value_type value(std::forward< Args >(args)...);
     push(value);
     return *_buffer[_index];
   }
@@ -484,7 +488,7 @@ class circular_buffer
     _index = _capacity-1;
   }
   
-  constexpr void swap(circular_buffer& other) noexcept(std::allocator_traits<allocator_type>::propagate_on_container_swap::value || std::allocator_traits<allocator_type>::is_always_equal::value)
+  constexpr void swap(circular_buffer& other) noexcept(std::allocator_traits< allocator_type >::propagate_on_container_swap::value || std::allocator_traits< allocator_type >::is_always_equal::value)
   {
     if(std::allocator_traits<allocator_type>::propagate_on_container_swap::value && _allocator == other._allocator) {
       std::swap(_allocator, other._allocator);
@@ -510,19 +514,26 @@ class circular_buffer< T, Allocator>::circular_buffer_iterator
   typedef Type&                           reference;
   typedef std::random_access_iterator_tag iterator_category;
   
-  
  private:
-  size_type _indexIt;
+  size_type _offset;
   const circular_buffer< T, Allocator>& _parent;
   
-  constexpr explicit circular_buffer_iterator(const circular_buffer< T, Allocator> &parent, size_type indexIt = 0) noexcept
-    : _indexIt(indexIt)
+  constexpr size_type _index(size_type offset) const
+  {
+    return (_parent._size - offset - 1) % _parent._capacity;
+  }
+  
+  constexpr explicit circular_buffer_iterator(const circular_buffer< T, Allocator > &parent, size_type offset = 0) noexcept
+    : _offset(offset)
     , _parent(parent)
   {
   }
   
-  constexpr explicit circular_buffer_iterator(const circular_buffer_iterator& other) noexcept = default;
-  constexpr explicit circular_buffer_iterator(circular_buffer_iterator&& other) noexcept = default;
+ public:
+  friend circular_buffer< T, Allocator>;
+ 
+  constexpr circular_buffer_iterator(const circular_buffer_iterator& other) noexcept = default;
+  constexpr circular_buffer_iterator(circular_buffer_iterator&& other) noexcept = default;
   constexpr circular_buffer_iterator& operator=(const circular_buffer_iterator& other) noexcept = default;
   constexpr circular_buffer_iterator& operator=(circular_buffer_iterator&& other) noexcept = default;
   
@@ -530,12 +541,12 @@ class circular_buffer< T, Allocator>::circular_buffer_iterator
   
   constexpr reference operator*() noexcept
   {
-    return _parent._buffer[_indexIt];
+    return _parent._buffer[_index(_offset)];
   }
   
   constexpr circular_buffer_iterator& operator++() noexcept
   {
-    _indexIt = (_indexIt + _parent._capacity - 1) % _parent._capacity;
+    _offset ++;
     return *this;
   }
    
@@ -548,7 +559,7 @@ class circular_buffer< T, Allocator>::circular_buffer_iterator
   
   constexpr circular_buffer_iterator& operator--() noexcept
   {
-    _indexIt = (_indexIt + _parent._capacity + 1) % _parent._capacity;
+    _offset --;
     return *this;
   }
   
@@ -561,13 +572,13 @@ class circular_buffer< T, Allocator>::circular_buffer_iterator
   
   constexpr circular_buffer_iterator& operator+=(difference_type i) noexcept
   {
-    _indexIt += i;
+    _offset += i;
     return *this;
   }
   
   constexpr circular_buffer_iterator& operator-=(difference_type i) noexcept
   {
-    _indexIt -= i;
+    _offset -= i;
     return *this;
   }
   
@@ -587,37 +598,37 @@ class circular_buffer< T, Allocator>::circular_buffer_iterator
   
   constexpr reference operator[](difference_type n) const noexcept
   {
-    return _parent._buffer[(_indexIt + _parent._capacity + n) % _parent._capacity];
+    return _parent._buffer[_index(_offset + n)];
   }
   
   constexpr bool operator==(const circular_buffer_iterator& other) const noexcept
   {
-    return _indexIt == other._indexIt;
+    return _offset == other._offset;
   }
   
   constexpr bool operator!=(const circular_buffer_iterator& other) const noexcept
   {
-    return _indexIt != other._indexIt;
+    return _offset != other._offset;
   }
   
   constexpr bool operator<(const circular_buffer_iterator& other) const noexcept
   {
-    return _indexIt > other._indexIt;
+    return _offset > other._offset;
   }
   
   constexpr bool operator>(const circular_buffer_iterator& other) const noexcept
   {
-    return _indexIt < other._indexIt;
+    return _offset < other._offset;
   }
   
   constexpr bool operator<=(const circular_buffer_iterator& other) const noexcept
   {
-    return _indexIt >= other._indexIt;
+    return _offset >= other._offset;
   }
   
   constexpr bool operator>=(const circular_buffer_iterator& other) const noexcept
   {
-    return _indexIt <= other._indexIt;
+    return _offset <= other._offset;
   }
   
 };
