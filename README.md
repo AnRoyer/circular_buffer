@@ -1,5 +1,7 @@
 # circular_buffer (Work in progress)
 
+![GitHub](https://img.shields.io/github/license/AnRoyer/circular_buffer)
+
 circular_buffer is a C++20 library available as a header-only implementation, designed to incorporate a [circular buffer](https://en.wikipedia.org/wiki/Circular_buffer) data structure.
 
 ## Installation
@@ -71,7 +73,7 @@ Member functions of `anr::circular_buffer` are `constexpr`: it is possible to cr
   /* (2) */ constexpr explicit circular_buffer(const allocator_type& a) noexcept;
   /* (3) */ constexpr explicit circular_buffer(size_type count, const allocator_type& alloc = allocator_type());
   /* (4) */ constexpr explicit circular_buffer(size_type count, const_reference value, const allocator_type& alloc = allocator_type());
-  template< class InputIt >
+  /*******/ template< class InputIt >
   /* (5) */ constexpr circular_buffer(InputIt first, InputIt last, const allocator_type& alloc = allocator_type());
   /* (6) */ constexpr circular_buffer(const circular_buffer& other);
   /* (7) */ constexpr circular_buffer(const circular_buffer& other, const allocator_type& alloc);
