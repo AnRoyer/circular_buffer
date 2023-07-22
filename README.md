@@ -1,7 +1,7 @@
 # circular_buffer (Work in progress)
 
-![GitHub](https://img.shields.io/github/license/AnRoyer/circular_buffer) 
-![GitHub release (with filter)](https://img.shields.io/github/v/release/AnRoyer/circular_buffer)
+[![GitHub](https://img.shields.io/github/license/AnRoyer/circular_buffer)](https://github.com/AnRoyer/circular_buffer/blob/main/LICENSE.md)
+[![GitHub](https://img.shields.io/github/release/AnRoyer/circular_buffer.svg)](https://github.com/AnRoyer/circular_buffer/releases)
 
 circular_buffer is a C++20 library available as a header-only implementation, designed to incorporate a [circular buffer](https://en.wikipedia.org/wiki/Circular_buffer) data structure.
 
