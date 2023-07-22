@@ -76,6 +76,15 @@ namespace anr
       }
     }
     
+    static void check_out_of_range(size_type pos, size_type size)
+    {
+      if(pos >= size) {
+        char buffer[256];
+        std::snprintf(buffer, 256, "The position %lu exceeds the circular buffer size (%lu)", pos, size);
+        throw std::out_of_range(buffer);
+      }
+    }
+    
     void _set_invalid()
     {
       _buffer = nullptr;
@@ -127,7 +136,16 @@ namespace anr
     
 
    public:
-    constexpr explicit circular_buffer(const allocator_type& a = allocator_type()) noexcept
+    constexpr explicit circular_buffer() noexcept(noexcept(allocator_type()))
+      : _allocator()
+      , _buffer()
+      , _index(max_size())
+      , _size(0)
+      , _capacity(0)
+    {
+    }
+    
+    constexpr explicit circular_buffer(const allocator_type& a) noexcept
       : _allocator(a)
       , _buffer()
       , _index(max_size())
@@ -284,14 +302,7 @@ namespace anr
       return _allocator;
     }
     
-    static void check_out_of_range(size_type pos, size_type size)
-    {
-      if(pos >= size) {
-        char buffer[256];
-        std::snprintf(buffer, 256, "The position %lu exceeds the circular buffer size (%lu)", pos, size);
-        throw std::out_of_range(buffer);
-      }
-    }
+    // Element access
     
     constexpr reference at(size_type pos)
     {
@@ -321,21 +332,25 @@ namespace anr
     
     constexpr reference front()
     {
+      assert((_size != 0));
       return _buffer[_index];
     }
     
     constexpr const_reference front() const
     {
+      assert((_size != 0));
       return _buffer[_index];
     }
     
     constexpr reference back()
     {
+      assert((_size != 0));
       return operator[](_size-1);
     }
     
     constexpr const_reference back() const
     {
+      assert((_size != 0));
       return operator[](_size-1);
     }
     
@@ -348,6 +363,8 @@ namespace anr
     {
       return &_buffer[0];
     }
+    
+    // Iterators
       
     constexpr iterator begin() noexcept
     {
@@ -409,6 +426,8 @@ namespace anr
       return std::make_reverse_iterator(cbegin());
     }
     
+    // Capacity
+    
     [[nodiscard]] constexpr bool empty() const noexcept
     {
       return _size == 0;
@@ -440,6 +459,8 @@ namespace anr
       _reallocate(_size);
     }
     
+    // Modifiers
+    
     constexpr void clear() noexcept
     {
       if constexpr(std::is_destructible_v<value_type> && !std::is_trivially_destructible_v<value_type>) {
@@ -470,13 +491,13 @@ namespace anr
     }
     
     template< class... Args >
-    constexpr reference emplace(Args&&... args)
+    constexpr reference emplace_back(Args&&... args)
     {
       value_type value(std::forward< Args >(args)...);
-      push(value);
+      push(std::move(value));
       return *_buffer[_index];
     }
-    
+        
     constexpr void resize(size_type count)
     {
       resize(count, value_type());
@@ -484,12 +505,33 @@ namespace anr
     
     constexpr void resize(size_type count, const_reference value)
     {
-      _reallocate(count);
-      for(size_type i = _index+1; i < _capacity; ++i) {
-        _construct(i, value);
+      if(count == _size) {
+        return;
       }
-      _size = _capacity;
-      _index = _capacity-1;
+      if(count < _size) {
+        auto beg = rbegin();
+        for(auto it = rbegin(); it != rend()-(_size-count); ++it) {
+          *it = *(beg + (_size - count));
+        }
+        _index = std::distance(&_buffer[0], &(*(rend()-(_size-count))));
+        _size = count;
+      }
+      else {
+        if(count < _capacity) {
+          for(size_type i = 0; i < count; ++i) {
+            _construct(_index++, value);
+            _size ++;
+          }
+        }
+        else {
+          reserve(count);
+          for(size_type i = _index+1; i < _capacity; ++i) {
+            _construct(i, value);
+          }
+          _size = _capacity;
+          _index = _capacity-1;
+        }
+      }
     }
     
     constexpr void swap(circular_buffer& other) noexcept(std::allocator_traits< allocator_type >::propagate_on_container_swap::value || std::allocator_traits< allocator_type >::is_always_equal::value)
